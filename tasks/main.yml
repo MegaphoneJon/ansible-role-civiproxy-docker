@@ -1,0 +1,45 @@
+---
+- name: Set some initial facts
+  ansible.builtin.set_fact:
+    civiproxy_path: "/opt/docker/civiproxy"
+    caddy_path: "/opt/docker/caddy"
+    sld: "{{ fqdn | regex_search('(?:.+\\.)?([^.]+\\.(?:com|org|net|coop|space|co.uk|edu|info|us))', '\\1') | first}}"
+
+- name: Clone CiviProxy from Github
+  git:
+    repo: https://github.com/systopia/CiviProxy.git
+    dest: "{{ civiproxy_path }}"
+
+- name: Build the Docker image
+  community.docker.docker_image:
+    state: present
+    source: build
+    build:
+      path: "{{ civiproxy_path }}"
+    name: civiproxy
+
+- name: Create CiviProxy container
+  community.docker.docker_container:
+    name: civiproxy
+    image: civiproxy
+    state: started
+    networks:
+      - name: caddy
+    restart_policy: unless-stopped
+
+- name: Put civiproxy in Caddyfile
+  ansible.builtin.blockinfile:
+    marker: "# {mark} CiviProxy"
+    path: "{{ caddy_path }}/Caddyfile"
+    block: |
+      (restricted_to_vpn) {   
+        # Need an actual IP for the remote system here!     
+        @denied not remote_ip 69.126.42.6
+        abort @denied
+      }
+
+      civiproxy.{{ sld }} {
+        import restricted_to_vpn
+        reverse_proxy civiproxy:80
+      }
+  notify: restart Caddy

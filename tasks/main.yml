@@ -32,14 +32,9 @@
     marker: "# {mark} CiviProxy"
     path: "{{ caddy_path }}/Caddyfile"
     block: |
-      (restricted_to_vpn) {   
-        # Need an actual IP for the remote system here!     
-        @denied not remote_ip 69.126.42.6
-        abort @denied
-      }
-
       civiproxy.{{ sld }} {
-        import restricted_to_vpn
+        @denied not remote_ip {{ civiproxy_ips }}
+        abort @denied
         reverse_proxy civiproxy:80
       }
   notify: restart Caddy
